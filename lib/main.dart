@@ -1,3 +1,4 @@
+import "package:animations/animations.dart";
 import "package:flutter/material.dart";
 
 import "screens/tasks_screen.dart";
@@ -6,6 +7,7 @@ import "screens/gallery_screen.dart";
 import "screens/settings_screen.dart";
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -26,15 +28,13 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const MyHomePage(title: "Home"),
+      home: const MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
+  const MyHomePage({super.key});
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -43,7 +43,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _widgetOptions = [
+  static const List<Widget> _tabItems = [
     TasksScreen(),
     NotesScreen(),
     GalleryScreen(),
@@ -59,7 +59,18 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(child: _widgetOptions.elementAt(_selectedIndex)),
+      body: PageTransitionSwitcher(
+        transitionBuilder: (child, primaryAnimation, _) {
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: primaryAnimation,
+              curve: Curves.easeOutQuart,
+            ),
+            child: child,
+          );
+        },
+        child: _tabItems[_selectedIndex],
+      ),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: _onItemTapped,
         selectedIndex: _selectedIndex,

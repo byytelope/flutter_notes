@@ -1,5 +1,7 @@
+import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:intl/intl.dart";
+import "package:localstore/localstore.dart";
 
 enum TaskFilters { today, all, done }
 
@@ -27,11 +29,13 @@ class TasksScreen extends StatefulWidget {
 class _TasksScreenState extends State<TasksScreen> {
   final List<Task> _tasks = [];
   TaskFilters _selectedFilter = TaskFilters.today;
+  final _db = Localstore.instance;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _sortTasks();
+    _loadTasks();
   }
 
   @override
@@ -39,16 +43,57 @@ class _TasksScreenState extends State<TasksScreen> {
     super.dispose();
   }
 
-  void _addTask(String text, DateTime? dueDate) {
-    if (text.isNotEmpty) {
-      setState(() {
-        _tasks.add(
+  Future<void> _loadTasks() async {
+    final snapshot = await _db.collection("tasks").get();
+    if (snapshot != null) {
+      final List<Task> loadedTasks = [];
+      snapshot.forEach((key, value) {
+        final id = key.split("/").last;
+        DateTime? dueDate;
+        if (value["dueDate"] != null) {
+          try {
+            dueDate = DateTime.parse(value["dueDate"]);
+          } catch (e) {
+            if (kDebugMode) {
+              print("Error parsing date for task $id: $e");
+            }
+          }
+        }
+        loadedTasks.add(
           Task(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            text: text,
+            id: id,
+            text: value["text"] ?? "",
             dueDate: dueDate,
+            isCompleted: value["isCompleted"] ?? false,
           ),
         );
+      });
+      setState(() {
+        _tasks.addAll(loadedTasks);
+        _sortTasks();
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _addTask(String text, DateTime? dueDate) async {
+    if (text.isNotEmpty) {
+      final id = _db.collection("tasks").doc().id;
+      final newTask = Task(id: id, text: text, dueDate: dueDate);
+      final taskData = {
+        "text": newTask.text,
+        "dueDate": newTask.dueDate?.toIso8601String(),
+        "isCompleted": newTask.isCompleted,
+      };
+
+      await _db.collection("tasks").doc(id).set(taskData);
+
+      setState(() {
+        _tasks.add(newTask);
         _sortTasks();
       });
     }
@@ -63,8 +108,8 @@ class _TasksScreenState extends State<TasksScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime(2101),
     );
-    if (date == null) return null;
 
+    if (date == null) return null;
     if (!context.mounted) return null;
 
     final TimeOfDay? time = await showTimePicker(
@@ -93,19 +138,30 @@ class _TasksScreenState extends State<TasksScreen> {
     });
   }
 
-  void _toggleTaskComplete(Task task) {
+  void _toggleTaskComplete(Task task) async {
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index != -1) {
+      final updatedTask = _tasks[index];
+      updatedTask.isCompleted = !updatedTask.isCompleted;
+
+      final taskData = {
+        "text": updatedTask.text,
+        "dueDate": updatedTask.dueDate?.toIso8601String(),
+        "isCompleted": updatedTask.isCompleted,
+      };
+      await _db.collection("tasks").doc(updatedTask.id).set(taskData);
+
       setState(() {
-        _tasks[index].isCompleted = !_tasks[index].isCompleted;
         _sortTasks();
       });
     }
   }
 
-  void _removeTask(Task taskToRemove) {
+  void _removeTask(Task taskToRemove) async {
     final actualIndex = _tasks.indexWhere((task) => task.id == taskToRemove.id);
     if (actualIndex != -1) {
+      final taskId = _tasks[actualIndex].id;
+      await _db.collection("tasks").doc(taskId).delete();
       setState(() {
         _tasks.removeAt(actualIndex);
       });
@@ -153,75 +209,82 @@ class _TasksScreenState extends State<TasksScreen> {
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
+        final mediaQuery = MediaQuery.of(context);
+        final height = mediaQuery.size.height;
+        final width = mediaQuery.size.width;
+
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
               icon: const Icon(Icons.add_task),
               title: const Text("Add New Task"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: dialogTaskController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: "Task Description",
-                        hintText: "Take out the trash",
+              content: SizedBox(
+                height: height * 0.2,
+                width: width * 0.8,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: dialogTaskController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: "Task Description",
+                          hintText: "Take out the trash",
+                        ),
+                        autofocus: true,
+                        onSubmitted: (_) {
+                          final String text = dialogTaskController.text.trim();
+                          if (text.isNotEmpty) {
+                            _addTask(text, dialogSelectedDateTime);
+                            Navigator.of(dialogContext).pop();
+                          }
+                        },
                       ),
-                      autofocus: true,
-                      onSubmitted: (_) {
-                        final String text = dialogTaskController.text.trim();
-                        if (text.isNotEmpty) {
-                          _addTask(text, dialogSelectedDateTime);
-                          Navigator.of(dialogContext).pop();
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            dialogSelectedDateTime == null
-                                ? "No due date set"
-                                : "Due: ${DateFormat.yMd().add_jm().format(dialogSelectedDateTime!)}",
-                            style: Theme.of(context).textTheme.bodySmall,
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              dialogSelectedDateTime == null
+                                  ? "No due date set"
+                                  : "Due: ${DateFormat.yMd().add_jm().format(dialogSelectedDateTime!)}",
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                           ),
-                        ),
-                        if (dialogSelectedDateTime != null)
+                          if (dialogSelectedDateTime != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              tooltip: "Clear Date/Time",
+                              onPressed:
+                                  () => setDialogState(
+                                    () => dialogSelectedDateTime = null,
+                                  ),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                            ),
                           IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
-                            tooltip: "Clear Date/Time",
-                            onPressed:
-                                () => setDialogState(
-                                  () => dialogSelectedDateTime = null,
-                                ),
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.calendar_today),
+                            tooltip: "Pick Due Date/Time",
+                            onPressed: () async {
+                              final pickedDateTime = await _pickDateTime(
+                                dialogSelectedDateTime,
+                              );
+                              if (pickedDateTime != dialogSelectedDateTime) {
+                                setDialogState(() {
+                                  dialogSelectedDateTime = pickedDateTime;
+                                });
+                              }
+                            },
+                            color:
+                                dialogSelectedDateTime != null
+                                    ? Theme.of(context).primaryColor
+                                    : null,
                           ),
-                        IconButton(
-                          icon: const Icon(Icons.calendar_today),
-                          tooltip: "Pick Due Date/Time",
-                          onPressed: () async {
-                            final pickedDateTime = await _pickDateTime(
-                              dialogSelectedDateTime,
-                            );
-                            if (pickedDateTime != dialogSelectedDateTime) {
-                              setDialogState(() {
-                                dialogSelectedDateTime = pickedDateTime;
-                              });
-                            }
-                          },
-                          color:
-                              dialogSelectedDateTime != null
-                                  ? Theme.of(context).primaryColor
-                                  : null,
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -288,170 +351,183 @@ class _TasksScreenState extends State<TasksScreen> {
               expandedHeight: 150.0,
               flexibleSpace: FlexibleSpaceBar(title: Text("Tasks")),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SegmentedButton<TaskFilters>(
-                  segments: const [
-                    ButtonSegment<TaskFilters>(
-                      value: TaskFilters.today,
-                      label: Text("Today"),
-                      icon: Icon(Icons.today),
-                    ),
-                    ButtonSegment<TaskFilters>(
-                      value: TaskFilters.all,
-                      label: Text("All"),
-                      icon: Icon(Icons.list),
-                    ),
-                    ButtonSegment<TaskFilters>(
-                      value: TaskFilters.done,
-                      label: Text("Done"),
-                      icon: Icon(Icons.check_circle),
-                    ),
-                  ],
-                  selected: {_selectedFilter},
-                  onSelectionChanged: (Set<TaskFilters> newSelection) {
-                    setState(() {
-                      _selectedFilter = newSelection.first;
-                    });
-                  },
-                ),
-              ),
-            ),
-            if (filteredTasks.isEmpty)
-              SliverToBoxAdapter(
+            if (_isLoading)
+              const SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Text(
-                      _selectedFilter == TaskFilters.done
-                          ? "No completed tasks."
-                          : _selectedFilter == TaskFilters.today
-                          ? "No tasks due today."
-                          : "No upcoming tasks.",
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                    padding: EdgeInsets.all(32.0),
+                    child: CircularProgressIndicator(),
                   ),
                 ),
               )
-            else
-              SliverList.builder(
-                itemCount: filteredTasks.length,
-                itemBuilder: (context, index) {
-                  final task = filteredTasks[index];
-                  final isCompleted = task.isCompleted;
-                  final dueDateText =
-                      task.dueDate != null
-                          ? DateFormat.yMd().add_jm().format(task.dueDate!)
-                          : null;
-
-                  return Dismissible(
-                    key: ValueKey(task.id),
-                    background: Container(
-                      color: isCompleted ? Colors.orange : Colors.green,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          Icon(
-                            isCompleted ? Icons.undo : Icons.check_circle,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            isCompleted ? "Mark Active" : "Mark Done",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+            else ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SegmentedButton<TaskFilters>(
+                    segments: const [
+                      ButtonSegment<TaskFilters>(
+                        value: TaskFilters.today,
+                        label: Text("Today"),
+                        icon: Icon(Icons.today),
+                      ),
+                      ButtonSegment<TaskFilters>(
+                        value: TaskFilters.all,
+                        label: Text("All"),
+                        icon: Icon(Icons.list),
+                      ),
+                      ButtonSegment<TaskFilters>(
+                        value: TaskFilters.done,
+                        label: Text("Done"),
+                        icon: Icon(Icons.check_circle),
+                      ),
+                    ],
+                    selected: {_selectedFilter},
+                    onSelectionChanged: (Set<TaskFilters> newSelection) {
+                      setState(() {
+                        _selectedFilter = newSelection.first;
+                      });
+                    },
+                  ),
+                ),
+              ),
+              if (filteredTasks.isEmpty)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Text(
+                        _selectedFilter == TaskFilters.done
+                            ? "No completed tasks."
+                            : _selectedFilter == TaskFilters.today
+                            ? "No tasks due today."
+                            : "No upcoming tasks.",
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
-                    secondaryBackground: Container(
-                      color: Colors.red,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      alignment: Alignment.centerRight,
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                            "Delete",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(Icons.delete, color: Colors.white),
-                        ],
-                      ),
-                    ),
-                    confirmDismiss: (direction) async {
-                      final taskInMainList = _tasks.firstWhere(
-                        (t) => t.id == task.id,
-                        orElse: () => task,
-                      );
+                  ),
+                )
+              else
+                SliverList.builder(
+                  itemCount: filteredTasks.length,
+                  itemBuilder: (context, index) {
+                    final task = filteredTasks[index];
+                    final isCompleted = task.isCompleted;
+                    final dueDateText =
+                        task.dueDate != null
+                            ? DateFormat.yMd().add_jm().format(task.dueDate!)
+                            : null;
 
-                      if (direction == DismissDirection.endToStart) {
-                        final bool? confirm =
-                            await _showDeleteConfirmationDialog(taskInMainList);
-                        return confirm ?? false;
-                      } else if (direction == DismissDirection.startToEnd) {
-                        _toggleTaskComplete(taskInMainList);
-                        return false;
-                      }
-                      return false;
-                    },
-                    onDismissed: (direction) {
-                      if (direction == DismissDirection.endToStart) {
-                        final taskInMainList = _tasks.firstWhere(
-                          (t) => t.id == task.id,
-                          orElse: () => task,
-                        );
-                        _removeTask(taskInMainList);
-                      }
-                    },
-                    child: ListTile(
-                      title: Text(
-                        task.text,
-                        style: TextStyle(
-                          decoration:
-                              isCompleted ? TextDecoration.lineThrough : null,
-                          color: isCompleted ? Colors.grey : null,
+                    return Dismissible(
+                      key: ValueKey(task.id),
+                      background: Container(
+                        color: isCompleted ? Colors.orange : Colors.green,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Icon(
+                              isCompleted ? Icons.undo : Icons.check_circle,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isCompleted ? "Mark Active" : "Mark Done",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      subtitle:
-                          dueDateText != null
-                              ? Text(
-                                "Due: $dueDateText",
-                                style: TextStyle(
-                                  color: isCompleted ? Colors.grey : null,
-                                  fontSize: 12,
-                                ),
-                              )
-                              : null,
-                      leading: Icon(
-                        isCompleted
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        color:
-                            isCompleted
-                                ? Colors.green
-                                : Theme.of(context).colorScheme.secondary,
+                      secondaryBackground: Container(
+                        color: Colors.red,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        alignment: Alignment.centerRight,
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              "Delete",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Icon(Icons.delete, color: Colors.white),
+                          ],
+                        ),
                       ),
-                      onTap: () {
+                      confirmDismiss: (direction) async {
                         final taskInMainList = _tasks.firstWhere(
                           (t) => t.id == task.id,
                           orElse: () => task,
                         );
-                        _toggleTaskComplete(taskInMainList);
+
+                        if (direction == DismissDirection.endToStart) {
+                          final bool? confirm =
+                              await _showDeleteConfirmationDialog(
+                                taskInMainList,
+                              );
+                          return confirm ?? false;
+                        } else if (direction == DismissDirection.startToEnd) {
+                          _toggleTaskComplete(taskInMainList);
+                          return false;
+                        }
+                        return false;
                       },
-                    ),
-                  );
-                },
-              ),
+                      onDismissed: (direction) {
+                        if (direction == DismissDirection.endToStart) {
+                          final taskInMainList = _tasks.firstWhere(
+                            (t) => t.id == task.id,
+                            orElse: () => task,
+                          );
+                          _removeTask(taskInMainList);
+                        }
+                      },
+                      child: ListTile(
+                        title: Text(
+                          task.text,
+                          style: TextStyle(
+                            decoration:
+                                isCompleted ? TextDecoration.lineThrough : null,
+                            color: isCompleted ? Colors.grey : null,
+                          ),
+                        ),
+                        subtitle:
+                            dueDateText != null
+                                ? Text(
+                                  "Due: $dueDateText",
+                                  style: TextStyle(
+                                    color: isCompleted ? Colors.grey : null,
+                                    fontSize: 12,
+                                  ),
+                                )
+                                : null,
+                        leading: Icon(
+                          isCompleted
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          color:
+                              isCompleted
+                                  ? Colors.green
+                                  : Theme.of(context).colorScheme.secondary,
+                        ),
+                        onTap: () {
+                          final taskInMainList = _tasks.firstWhere(
+                            (t) => t.id == task.id,
+                            orElse: () => task,
+                          );
+                          _toggleTaskComplete(taskInMainList);
+                        },
+                      ),
+                    );
+                  },
+                ),
+            ],
           ],
         ),
       ),
