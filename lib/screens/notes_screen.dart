@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 import "package:localstore/localstore.dart";
+import "package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart";
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
@@ -42,7 +43,7 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<String?> _showNoteDialog({String? initialText}) async {
     _textController.text = initialText ?? "";
 
-    return showDialog<String>(
+    return await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
         final mediaQuery = MediaQuery.of(context);
@@ -154,31 +155,61 @@ class _NotesScreenState extends State<NotesScreen> {
                   padding: const EdgeInsets.all(32.0),
                   child: Text(
                     "No notes yet.",
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
                 ),
               ),
             )
           else
-            SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final note = _notes[index];
-                return ListTile(
-                  title: Text(note["text"]),
-                  onTap: () => _editNote(index),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () async {
-                      final noteId = _notes[index]["id"];
-                      await _db.collection("notes").doc(noteId).delete();
+            SliverPadding(
+              padding: const EdgeInsets.all(8.0),
+              sliver: SliverMasonryGrid.count(
+                crossAxisCount: 2,
+                mainAxisSpacing: 8.0,
+                crossAxisSpacing: 8.0,
+                childCount: _notes.length,
+                itemBuilder: (context, index) {
+                  final note = _notes[index];
+                  return Card(
+                    elevation: 2.0,
+                    child: InkWell(
+                      onTap: () => _editNote(index),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              note["text"],
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.delete, size: 20.0),
+                                  tooltip: "Delete Note",
+                                  onPressed: () async {
+                                    final noteId = _notes[index]["id"];
+                                    await _db
+                                        .collection("notes")
+                                        .doc(noteId)
+                                        .delete();
 
-                      setState(() {
-                        _notes.removeAt(index);
-                      });
-                    },
-                  ),
-                );
-              }, childCount: _notes.length),
+                                    setState(() {
+                                      _notes.removeAt(index);
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
         ],
       ),

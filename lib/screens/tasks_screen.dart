@@ -402,7 +402,7 @@ class _TasksScreenState extends State<TasksScreen> {
                             : _selectedFilter == TaskFilters.today
                             ? "No tasks due today."
                             : "No upcoming tasks.",
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.bodyLarge,
                       ),
                     ),
                   ),

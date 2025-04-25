@@ -233,7 +233,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   padding: const EdgeInsets.all(32.0),
                   child: Text(
                     "No images added.",
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
                 ),
               ),

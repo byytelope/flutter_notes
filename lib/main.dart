@@ -1,13 +1,24 @@
-import "package:animations/animations.dart";
 import "package:flutter/material.dart";
+import "package:flutter_dotenv/flutter_dotenv.dart";
+import "package:hive_ce_flutter/hive_flutter.dart";
+import "package:supabase_flutter/supabase_flutter.dart";
 
-import "screens/tasks_screen.dart";
-import "screens/notes_screen.dart";
-import "screens/gallery_screen.dart";
-import "screens/settings_screen.dart";
+import "package:widget_training/screens/signin_screen.dart";
+import "package:widget_training/screens/home_screen.dart";
+import "package:widget_training/hive/hive_registrar.g.dart";
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load();
+
+  await Hive.initFlutter();
+  Hive.registerAdapters();
+
+  await Supabase.initialize(
+    url: dotenv.env["SUPABASE_URL"] ?? "",
+    anonKey: dotenv.env["SUPABASE_ANON_KEY"] ?? "",
+  );
+
   runApp(const MyApp());
 }
 
@@ -16,6 +27,8 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+
     return MaterialApp(
       title: "Widget Training",
       debugShowCheckedModeBanner: false,
@@ -28,75 +41,7 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const MyHomePage(),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _selectedIndex = 0;
-
-  static const List<Widget> _tabItems = [
-    TasksScreen(),
-    NotesScreen(),
-    GalleryScreen(),
-    SettingsScreen(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: PageTransitionSwitcher(
-        transitionBuilder: (child, primaryAnimation, _) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: primaryAnimation,
-              curve: Curves.easeOutQuart,
-            ),
-            child: child,
-          );
-        },
-        child: _tabItems[_selectedIndex],
-      ),
-      bottomNavigationBar: NavigationBar(
-        onDestinationSelected: _onItemTapped,
-        selectedIndex: _selectedIndex,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.task_outlined),
-            selectedIcon: Icon(Icons.task),
-            label: "Tasks",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.sticky_note_2_outlined),
-            selectedIcon: Icon(Icons.sticky_note_2),
-            label: "Notes",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.photo_library_outlined),
-            selectedIcon: Icon(Icons.photo_library),
-            label: "Gallery",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: "Settings",
-          ),
-        ],
-      ),
+      home: user == null ? const SignInScreen() : const HomeScreen(),
     );
   }
 }
