@@ -107,7 +107,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SliverAppBar(
           pinned: true,
           expandedHeight: 150.0,
-          flexibleSpace: FlexibleSpaceBar(title: Text("Settings")),
+          flexibleSpace: FlexibleSpaceBar(
+            title: Text("Settings"),
+            centerTitle: true,
+          ),
         ),
         SliverList(
           delegate: SliverChildListDelegate([

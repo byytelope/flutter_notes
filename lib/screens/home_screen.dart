@@ -15,6 +15,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  int _previousIndex = 0;
 
   static const List<Widget> _tabItems = [
     TasksScreen(),
@@ -25,24 +26,31 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onItemTapped(int index) {
     setState(() {
+      _previousIndex = _selectedIndex;
       _selectedIndex = index;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isReverse = _selectedIndex < _previousIndex;
+
     return Scaffold(
       body: PageTransitionSwitcher(
-        transitionBuilder: (child, primaryAnimation, _) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: primaryAnimation,
-              curve: Curves.easeOutQuart,
-            ),
+        reverse: isReverse,
+        child: _tabItems[_selectedIndex],
+        transitionBuilder: (
+          Widget child,
+          Animation<double> primaryAnimation,
+          Animation<double> secondaryAnimation,
+        ) {
+          return SharedAxisTransition(
+            animation: primaryAnimation,
+            secondaryAnimation: secondaryAnimation,
+            transitionType: SharedAxisTransitionType.horizontal,
             child: child,
           );
         },
-        child: _tabItems[_selectedIndex],
       ),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: _onItemTapped,

@@ -6,6 +6,9 @@ import "package:supabase_flutter/supabase_flutter.dart";
 import "package:widget_training/screens/signin_screen.dart";
 import "package:widget_training/screens/home_screen.dart";
 import "package:widget_training/hive/hive_registrar.g.dart";
+import "package:widget_training/models/note.dart";
+import "package:widget_training/models/gallery_photo.dart";
+import "package:widget_training/models/task.dart";
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +16,10 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   Hive.registerAdapters();
+
+  await Hive.openBox<Task>("tasks");
+  await Hive.openBox<Note>("notes");
+  await Hive.openBox<GalleryPhoto>("gallery_photos");
 
   await Supabase.initialize(
     url: dotenv.env["SUPABASE_URL"] ?? "",
@@ -28,16 +35,23 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
+    final seedColor = Colors.deepPurple;
 
     return MaterialApp(
       title: "Widget Training",
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(seedColor: seedColor),
+        pageTransitionsTheme: PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: const FadeForwardsPageTransitionsBuilder(),
+            TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+          },
+        ),
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
+          seedColor: seedColor,
           brightness: Brightness.dark,
         ),
       ),

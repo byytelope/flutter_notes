@@ -93,23 +93,17 @@ class GalleryPhotoAdapter extends TypeAdapter<GalleryPhoto> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return GalleryPhoto(
-      id: fields[0] as String,
-      path: fields[1] as String,
-      createdAt: fields[2] as DateTime,
-    );
+    return GalleryPhoto(id: fields[0] as String, path: fields[1] as String);
   }
 
   @override
   void write(BinaryWriter writer, GalleryPhoto obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(2)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.path)
-      ..writeByte(2)
-      ..write(obj.createdAt);
+      ..write(obj.path);
   }
 
   @override

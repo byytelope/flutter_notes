@@ -4,7 +4,7 @@ class Task extends HiveObject {
   final String id;
   final String text;
   final DateTime? dueDate;
-  final bool isCompleted;
+  bool isCompleted;
   final DateTime createdAt;
 
   Task({

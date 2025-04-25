@@ -1,6 +1,9 @@
 import "package:flutter/material.dart";
-import "package:localstore/localstore.dart";
+import "package:uuid/uuid.dart";
+import "package:hive_ce_flutter/hive_flutter.dart";
 import "package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart";
+
+import "package:widget_training/models/note.dart";
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
@@ -10,34 +13,13 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
-  final List<Map<String, dynamic>> _notes = [];
   final TextEditingController _textController = TextEditingController();
-  final _db = Localstore.instance;
-  bool _isLoading = true;
+  final _box = Hive.box<Note>("notes");
+  final _uuid = const Uuid();
 
   @override
   void initState() {
     super.initState();
-    _loadNotes();
-  }
-
-  Future<void> _loadNotes() async {
-    final snapshot = await _db.collection("notes").get();
-    if (snapshot != null) {
-      final List<Map<String, dynamic>> loadedNotes = [];
-      snapshot.forEach((key, value) {
-        final id = key.split("/").last;
-        loadedNotes.add({"id": id, "text": value["text"]});
-      });
-      setState(() {
-        _notes.addAll(loadedNotes);
-        _isLoading = false;
-      });
-    } else {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   Future<String?> _showNoteDialog({String? initialText}) async {
@@ -73,7 +55,7 @@ class _NotesScreenState extends State<NotesScreen> {
               ),
             ),
           ),
-          actions: <Widget>[
+          actions: [
             TextButton(
               child: const Text("Cancel"),
               onPressed: () {
@@ -95,31 +77,19 @@ class _NotesScreenState extends State<NotesScreen> {
 
   void _addNote() async {
     final String? newNoteText = await _showNoteDialog();
-    if (newNoteText != null && newNoteText.isNotEmpty) {
-      final id = _db.collection("notes").doc().id;
-      final newNoteData = {"id": id, "text": newNoteText};
-      await _db.collection("notes").doc(id).set({"text": newNoteText});
 
-      setState(() {
-        _notes.add(newNoteData);
-      });
-    }
+    final String id = _uuid.v4();
+    final newNote = Note(id: id, text: newNoteText ?? "");
+    await _box.put(id, newNote);
   }
 
-  void _editNote(int index) async {
-    final note = _notes[index];
+  void _editNote(Note note) async {
     final String? updatedNoteText = await _showNoteDialog(
-      initialText: note["text"],
+      initialText: note.text,
     );
     if (updatedNoteText != null && updatedNoteText.isNotEmpty) {
-      final updatedNoteData = {"id": note["id"], "text": updatedNoteText};
-      await _db.collection("notes").doc(note["id"]).set({
-        "text": updatedNoteText,
-      });
-
-      setState(() {
-        _notes[index] = updatedNoteData;
-      });
+      note.text = updatedNoteText;
+      await note.save();
     }
   }
 
@@ -137,80 +107,71 @@ class _NotesScreenState extends State<NotesScreen> {
           const SliverAppBar(
             pinned: true,
             expandedHeight: 150.0,
-            flexibleSpace: FlexibleSpaceBar(title: Text("Notes")),
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text("Notes"),
+              centerTitle: true,
+            ),
           ),
-          if (_isLoading)
-            SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-            )
-          else if (_notes.isEmpty)
-            SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Text(
-                    "No notes yet.",
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.all(8.0),
-              sliver: SliverMasonryGrid.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 8.0,
-                crossAxisSpacing: 8.0,
-                childCount: _notes.length,
-                itemBuilder: (context, index) {
-                  final note = _notes[index];
-                  return Card(
-                    elevation: 2.0,
-                    child: InkWell(
-                      onTap: () => _editNote(index),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              note["text"],
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.delete, size: 20.0),
-                                  tooltip: "Delete Note",
-                                  onPressed: () async {
-                                    final noteId = _notes[index]["id"];
-                                    await _db
-                                        .collection("notes")
-                                        .doc(noteId)
-                                        .delete();
 
-                                    setState(() {
-                                      _notes.removeAt(index);
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
+          ValueListenableBuilder(
+            valueListenable: _box.listenable(),
+            builder: (context, Box<Note> box, _) {
+              if (!box.isOpen) {
+                return SliverToBoxAdapter(
+                  child: const Center(child: CircularProgressIndicator()),
+                );
+              }
+              final notes = box.values.toList();
+              notes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+              if (notes.isEmpty) {
+                return SliverToBoxAdapter(
+                  child: const Center(child: Text("No notes yet!")),
+                );
+              }
+
+              return SliverPadding(
+                padding: const EdgeInsets.all(8.0),
+                sliver: SliverMasonryGrid.count(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 8.0,
+                  crossAxisSpacing: 8.0,
+                  childCount: notes.length,
+                  itemBuilder: (context, index) {
+                    final note = notes[index];
+                    return Card(
+                      elevation: 2.0,
+                      child: InkWell(
+                        onTap: () => _editNote(note),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                note.text,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, size: 20.0),
+                                    tooltip: "Delete Note",
+                                    onPressed: () async {},
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              ),
-            ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(

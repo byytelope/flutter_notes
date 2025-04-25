@@ -1,8 +1,8 @@
 import "package:hive_ce/hive.dart";
 
 import "package:widget_training/models/note.dart";
-import "package:widget_training/screens/gallery_screen.dart";
-import "package:widget_training/screens/tasks_screen.dart";
+import "package:widget_training/models/gallery_photo.dart";
+import "package:widget_training/models/task.dart";
 
 part "hive_adapters.g.dart";
 

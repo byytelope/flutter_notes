@@ -31,5 +31,3 @@ types:
         index: 0
       path:
         index: 1
-      createdAt:
-        index: 2
