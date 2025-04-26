@@ -12,22 +12,17 @@ class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
 
   @override
-  State<GalleryScreen> createState() => _GalleryScreenState();
+  State<GalleryScreen> createState() => GalleryScreenState();
 }
 
-class _GalleryScreenState extends State<GalleryScreen> {
-  final Set<int> _selectedIndices = {};
+class GalleryScreenState extends State<GalleryScreen> {
   final ImagePicker _picker = ImagePicker();
   final _box = Hive.box<GalleryPhoto>("gallery_photos");
   final _uuid = const Uuid();
-  bool _isSelectionMode = false;
+  final Set<int> _selectedIndices = {};
+  bool isSelectionMode = false;
 
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  void _addImage() async {
+  void addImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
@@ -58,19 +53,19 @@ class _GalleryScreenState extends State<GalleryScreen> {
       if (_selectedIndices.contains(index)) {
         _selectedIndices.remove(index);
         if (_selectedIndices.isEmpty) {
-          _isSelectionMode = false;
+          isSelectionMode = false;
         }
       } else {
         _selectedIndices.add(index);
-        _isSelectionMode = true;
+        isSelectionMode = true;
       }
     });
   }
 
   void _enableSelectionMode(int index) {
-    if (!_isSelectionMode) {
+    if (!isSelectionMode) {
       setState(() {
-        _isSelectionMode = true;
+        isSelectionMode = true;
         _selectedIndices.clear();
         _selectedIndices.add(index);
       });
@@ -79,12 +74,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   void _disableSelectionMode() {
     setState(() {
-      _isSelectionMode = false;
+      isSelectionMode = false;
       _selectedIndices.clear();
     });
   }
 
-  void _deleteSelectedImages() {
+  void deleteSelectedImages() {
     _deleteImages(_selectedIndices.toList());
   }
 
@@ -110,24 +105,24 @@ class _GalleryScreenState extends State<GalleryScreen> {
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
               title: Text(
-                _isSelectionMode
+                isSelectionMode
                     ? "${_selectedIndices.length} selected"
                     : "Gallery",
               ),
             ),
             leading:
-                _isSelectionMode
+                isSelectionMode
                     ? IconButton(
                       icon: const Icon(Icons.close),
                       onPressed: _disableSelectionMode,
                       tooltip: "Cancel Selection",
                     )
                     : null,
-            actions: _isSelectionMode ? [] : null,
+            actions: isSelectionMode ? [] : null,
           ),
           ValueListenableBuilder(
             valueListenable: _box.listenable(),
-            builder: (context, Box<GalleryPhoto> box, _) {
+            builder: (context, box, _) {
               if (!box.isOpen) {
                 return SliverToBoxAdapter(
                   child: const Center(child: CircularProgressIndicator()),
@@ -138,10 +133,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
               if (images.isEmpty) {
                 return SliverToBoxAdapter(
-                  child: Center(
+                  child: FractionallySizedBox(
+                    widthFactor: 0.8,
                     child: Text(
-                      "No images added.",
+                      "Press the button below to add an image.",
                       style: Theme.of(context).textTheme.bodyLarge,
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 );
@@ -166,7 +163,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
                     return GestureDetector(
                       onTap: () {
-                        if (_isSelectionMode) {
+                        if (isSelectionMode) {
                           _toggleSelection(index);
                         } else {
                           Navigator.of(
@@ -206,11 +203,17 @@ class _GalleryScreenState extends State<GalleryScreen> {
                                     print("Error loading image: $error");
                                   }
                                   return Container(
-                                    color: Colors.grey[300],
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.tertiaryContainer,
                                     alignment: Alignment.center,
                                     child: Icon(
                                       Icons.broken_image,
-                                      color: Colors.grey[600],
+                                      color:
+                                          Theme.of(
+                                            context,
+                                          ).colorScheme.onTertiaryContainer,
                                     ),
                                   );
                                 },
@@ -235,16 +238,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
             },
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _isSelectionMode ? _deleteSelectedImages : _addImage,
-        tooltip: _isSelectionMode ? "Delete Selected" : "Add Image",
-        backgroundColor: _isSelectionMode ? Colors.red : null,
-        child: Icon(
-          _isSelectionMode
-              ? Icons.delete_outline
-              : Icons.add_photo_alternate_outlined,
-        ),
       ),
     );
   }

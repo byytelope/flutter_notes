@@ -9,18 +9,13 @@ class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
 
   @override
-  State<NotesScreen> createState() => _NotesScreenState();
+  State<NotesScreen> createState() => NotesScreenState();
 }
 
-class _NotesScreenState extends State<NotesScreen> {
+class NotesScreenState extends State<NotesScreen> {
   final TextEditingController _textController = TextEditingController();
   final _box = Hive.box<Note>("notes");
   final _uuid = const Uuid();
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   Future<String?> _showNoteDialog({String? initialText}) async {
     _textController.text = initialText ?? "";
@@ -39,20 +34,21 @@ class _NotesScreenState extends State<NotesScreen> {
                 : Icons.edit_note_outlined,
           ),
           title: Text(initialText == null ? "Add Note" : "Edit Note"),
-          content: SizedBox(
-            height: height * 0.15,
+          content: Container(
+            constraints: BoxConstraints(
+              maxHeight: height * 0.5,
+              minHeight: height * 0.1,
+            ),
             width: width * 0.8,
-            child: Center(
-              child: TextField(
-                controller: _textController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: "Note Text",
-                  hintText: "Enter your note here",
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: null,
+            child: TextField(
+              controller: _textController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: "Note Text",
+                hintText: "Enter your note here",
+                border: OutlineInputBorder(),
               ),
+              maxLines: null,
             ),
           ),
           actions: [
@@ -75,11 +71,15 @@ class _NotesScreenState extends State<NotesScreen> {
     );
   }
 
-  void _addNote() async {
+  void addNote() async {
     final String? newNoteText = await _showNoteDialog();
 
+    if (newNoteText == null || newNoteText.isEmpty) {
+      return;
+    }
+
     final String id = _uuid.v4();
-    final newNote = Note(id: id, text: newNoteText ?? "");
+    final newNote = Note(id: id, text: newNoteText);
     await _box.put(id, newNote);
   }
 
@@ -91,6 +91,10 @@ class _NotesScreenState extends State<NotesScreen> {
       note.text = updatedNoteText;
       await note.save();
     }
+  }
+
+  void _deleteNote(Note note) async {
+    await note.delete();
   }
 
   @override
@@ -115,7 +119,7 @@ class _NotesScreenState extends State<NotesScreen> {
 
           ValueListenableBuilder(
             valueListenable: _box.listenable(),
-            builder: (context, Box<Note> box, _) {
+            builder: (context, box, _) {
               if (!box.isOpen) {
                 return SliverToBoxAdapter(
                   child: const Center(child: CircularProgressIndicator()),
@@ -126,7 +130,14 @@ class _NotesScreenState extends State<NotesScreen> {
 
               if (notes.isEmpty) {
                 return SliverToBoxAdapter(
-                  child: const Center(child: Text("No notes yet!")),
+                  child: FractionallySizedBox(
+                    widthFactor: 0.8,
+                    child: Text(
+                      "Tap the button below to add a note.",
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 );
               }
 
@@ -139,30 +150,23 @@ class _NotesScreenState extends State<NotesScreen> {
                   childCount: notes.length,
                   itemBuilder: (context, index) {
                     final note = notes[index];
-                    return Card(
-                      elevation: 2.0,
+                    return Card.filled(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
                       child: InkWell(
+                        borderRadius: BorderRadius.circular(8.0),
                         onTap: () => _editNote(note),
                         child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                note.text,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, size: 20.0),
-                                    tooltip: "Delete Note",
-                                    onPressed: () async {},
-                                  ),
-                                ],
-                              ),
-                            ],
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            note.text,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyLarge?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSecondaryContainer,
+                            ),
                           ),
                         ),
                       ),
@@ -173,11 +177,6 @@ class _NotesScreenState extends State<NotesScreen> {
             },
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addNote,
-        tooltip: "Add Note",
-        child: const Icon(Icons.note_add_outlined),
       ),
     );
   }

@@ -14,3 +14,5 @@ class Task extends HiveObject {
     this.isCompleted = false,
   }) : createdAt = DateTime.now();
 }
+
+enum TaskFilter { today, all, done }

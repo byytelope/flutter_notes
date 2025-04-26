@@ -17,18 +17,71 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   int _previousIndex = 0;
 
-  static const List<Widget> _tabItems = [
-    TasksScreen(),
-    NotesScreen(),
-    GalleryScreen(),
-    SettingsScreen(),
-  ];
+  final GlobalKey<TasksScreenState> _tasksScreenKey =
+      GlobalKey<TasksScreenState>();
+  final GlobalKey<NotesScreenState> _notesScreenKey =
+      GlobalKey<NotesScreenState>();
+  final GlobalKey<GalleryScreenState> _galleryScreenKey =
+      GlobalKey<GalleryScreenState>();
+
+  late final List<Widget> _tabItems;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabItems = [
+      TasksScreen(key: _tasksScreenKey),
+      NotesScreen(key: _notesScreenKey),
+      GalleryScreen(key: _galleryScreenKey),
+      const SettingsScreen(),
+    ];
+  }
 
   void _onItemTapped(int index) {
+    if (_selectedIndex == index) return;
     setState(() {
       _previousIndex = _selectedIndex;
       _selectedIndex = index;
     });
+  }
+
+  Widget? _buildFab() {
+    switch (_selectedIndex) {
+      case 0:
+        return FloatingActionButton(
+          key: const ValueKey("fab_tasks"),
+          onPressed: () => _tasksScreenKey.currentState?.showAddTaskDialog(),
+          tooltip: "Add Task",
+          child: const Icon(Icons.add),
+        );
+      case 1:
+        return FloatingActionButton(
+          key: const ValueKey("fab_notes"),
+          onPressed: () => _notesScreenKey.currentState?.addNote(),
+          tooltip: "Add Note",
+          child: const Icon(Icons.note_add_outlined),
+        );
+      case 2:
+        final isGallerySelectionMode =
+            _galleryScreenKey.currentState?.isSelectionMode ?? false;
+        return FloatingActionButton(
+          key: const ValueKey("fab_gallery"),
+          onPressed:
+              isGallerySelectionMode
+                  ? () => _galleryScreenKey.currentState?.deleteSelectedImages()
+                  : () => _galleryScreenKey.currentState?.addImage(),
+          tooltip: isGallerySelectionMode ? "Delete Selected" : "Add Image",
+          backgroundColor: isGallerySelectionMode ? Colors.red : null,
+          child: Icon(
+            isGallerySelectionMode
+                ? Icons.delete_outline
+                : Icons.add_photo_alternate_outlined,
+          ),
+        );
+      case 3:
+      default:
+        return null;
+    }
   }
 
   @override
@@ -38,7 +91,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: PageTransitionSwitcher(
         reverse: isReverse,
-        child: _tabItems[_selectedIndex],
+        child: KeyedSubtree(
+          key: ValueKey(_selectedIndex),
+          child: _tabItems[_selectedIndex],
+        ),
         transitionBuilder: (
           Widget child,
           Animation<double> primaryAnimation,
@@ -52,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+      floatingActionButton: _buildFab(),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: _onItemTapped,
         selectedIndex: _selectedIndex,
