@@ -6,10 +6,12 @@ import "package:hive_ce_flutter/hive_flutter.dart";
 import "package:image_picker/image_picker.dart";
 import "package:uuid/uuid.dart";
 
-import "package:widget_training/models/gallery_photo.dart";
+import "package:flutter_notes/models/gallery_photo.dart";
 
 class GalleryScreen extends StatefulWidget {
-  const GalleryScreen({super.key});
+  final ValueChanged<bool>? onSelectionModeChanged;
+
+  const GalleryScreen({super.key, this.onSelectionModeChanged});
 
   @override
   State<GalleryScreen> createState() => GalleryScreenState();
@@ -18,8 +20,9 @@ class GalleryScreen extends StatefulWidget {
 class GalleryScreenState extends State<GalleryScreen> {
   final ImagePicker _picker = ImagePicker();
   final _box = Hive.box<GalleryPhoto>("gallery_photos");
+  final _prefsBox = Hive.box("user_preferences");
   final _uuid = const Uuid();
-  final Set<int> _selectedIndices = {};
+  final Set<String> _selectedIds = {};
   bool isSelectionMode = false;
 
   void addImage() async {
@@ -33,41 +36,39 @@ class GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
-  Future<void> _deleteImages(List<int> indices) async {
-    if (indices.isEmpty) return;
+  Future<void> _deleteImages() async {
+    if (_selectedIds.isEmpty) return;
 
-    await _box.deleteAll(
-      indices.map((index) {
-        final image = _box.getAt(index);
-        return image?.id;
-      }).toList(),
-    );
+    await _box.deleteAll(_selectedIds);
 
     setState(() {
       _disableSelectionMode();
     });
   }
 
-  void _toggleSelection(int index) {
+  void _toggleSelection(String id) {
     setState(() {
-      if (_selectedIndices.contains(index)) {
-        _selectedIndices.remove(index);
-        if (_selectedIndices.isEmpty) {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) {
           isSelectionMode = false;
         }
       } else {
-        _selectedIndices.add(index);
+        _selectedIds.add(id);
         isSelectionMode = true;
       }
+
+      widget.onSelectionModeChanged?.call(isSelectionMode);
     });
   }
 
-  void _enableSelectionMode(int index) {
+  void _enableSelectionMode(String id) {
     if (!isSelectionMode) {
       setState(() {
         isSelectionMode = true;
-        _selectedIndices.clear();
-        _selectedIndices.add(index);
+        _selectedIds.clear();
+        _selectedIds.add(id);
+        widget.onSelectionModeChanged?.call(isSelectionMode);
       });
     }
   }
@@ -75,12 +76,63 @@ class GalleryScreenState extends State<GalleryScreen> {
   void _disableSelectionMode() {
     setState(() {
       isSelectionMode = false;
-      _selectedIndices.clear();
+      _selectedIds.clear();
+      widget.onSelectionModeChanged?.call(isSelectionMode);
     });
   }
 
-  void deleteSelectedImages() {
-    _deleteImages(_selectedIndices.toList());
+  void deleteSelectedImages() async {
+    final bool confirmDeletions = _prefsBox.get(
+      "confirm_deletions",
+      defaultValue: true,
+    );
+
+    if (confirmDeletions && _selectedIds.isNotEmpty) {
+      final bool? confirm = await _showDeleteConfirmationDialog(
+        _selectedIds.length,
+      );
+      if (confirm == true) {
+        _deleteImages();
+      }
+    } else if (_selectedIds.isNotEmpty) {
+      _deleteImages();
+    }
+  }
+
+  Future<bool?> _showDeleteConfirmationDialog(int count) async {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Confirm Delete"),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: [
+                Text(
+                  "Are you sure you want to delete $count selected image${count > 1 ? 's' : ''}?",
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text("Delete"),
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Route _createPreviewRoute(GalleryPhoto image) {
@@ -105,9 +157,7 @@ class GalleryScreenState extends State<GalleryScreen> {
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
               title: Text(
-                isSelectionMode
-                    ? "${_selectedIndices.length} selected"
-                    : "Gallery",
+                isSelectionMode ? "${_selectedIds.length} selected" : "Gallery",
               ),
             ),
             leading:
@@ -159,27 +209,18 @@ class GalleryScreenState extends State<GalleryScreen> {
                   ) {
                     final image = images[index];
                     final imagePath = image.path;
-                    final isSelected = _selectedIndices.contains(index);
+                    final isSelected = _selectedIds.contains(image.id);
 
-                    return GestureDetector(
-                      onTap: () {
-                        if (isSelectionMode) {
-                          _toggleSelection(index);
-                        } else {
-                          Navigator.of(
-                            context,
-                          ).push(_createPreviewRoute(image));
-                        }
-                      },
-                      onLongPress: () => _enableSelectionMode(index),
-                      child: Hero(
-                        tag: image.id,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8.0),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.file(
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Hero(
+                              tag: image.id,
+                              child: Image.file(
                                 File(imagePath),
                                 fit: BoxFit.cover,
                                 frameBuilder: (
@@ -218,17 +259,46 @@ class GalleryScreenState extends State<GalleryScreen> {
                                   );
                                 },
                               ),
-                              if (isSelected)
-                                Container(
-                                  color: Colors.black.withValues(alpha: 0.5),
-                                  child: const Icon(
-                                    Icons.check_circle,
-                                    color: Colors.white,
-                                    size: 30,
-                                  ),
-                                ),
-                            ],
-                          ),
+                            ),
+                            InkWell(
+                              onTap: () {
+                                if (isSelectionMode) {
+                                  _toggleSelection(image.id);
+                                } else {
+                                  Navigator.of(
+                                    context,
+                                  ).push(_createPreviewRoute(image));
+                                }
+                              },
+                              onLongPress: () {
+                                if (isSelectionMode) {
+                                  setState(() {
+                                    _toggleSelection(image.id);
+                                  });
+                                } else {
+                                  _enableSelectionMode(image.id);
+                                }
+                              },
+                              child:
+                                  isSelected
+                                      ? Container(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primaryFixed
+                                            .withValues(alpha: 0.5),
+                                        alignment: Alignment.center,
+                                        child: Icon(
+                                          Icons.check_circle,
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.onPrimaryFixed,
+                                          size: 30,
+                                        ),
+                                      )
+                                      : null,
+                            ),
+                          ],
                         ),
                       ),
                     );

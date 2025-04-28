@@ -2,8 +2,8 @@
 // Do not modify
 // Check in to version control
 
-import 'package:hive_ce/hive.dart';
-import 'package:widget_training/hive/hive_adapters.dart';
+import "package:hive_ce/hive.dart";
+import "package:flutter_notes/hive/hive_adapters.dart";
 
 extension HiveRegistrar on HiveInterface {
   void registerAdapters() {

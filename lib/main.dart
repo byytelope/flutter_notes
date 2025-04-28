@@ -3,12 +3,12 @@ import "package:flutter_dotenv/flutter_dotenv.dart";
 import "package:hive_ce_flutter/hive_flutter.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
-import "package:widget_training/hive/hive_registrar.g.dart";
-import "package:widget_training/screens/signin_screen.dart";
-import "package:widget_training/screens/home_screen.dart";
-import "package:widget_training/models/note.dart";
-import "package:widget_training/models/gallery_photo.dart";
-import "package:widget_training/models/task.dart";
+import "package:flutter_notes/hive/hive_registrar.g.dart";
+import "package:flutter_notes/screens/signin_screen.dart";
+import "package:flutter_notes/screens/home_screen.dart";
+import "package:flutter_notes/models/note.dart";
+import "package:flutter_notes/models/gallery_photo.dart";
+import "package:flutter_notes/models/task.dart";
 
 extension StringExtension on String {
   String capitalize() {

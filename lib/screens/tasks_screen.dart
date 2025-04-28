@@ -3,7 +3,7 @@ import "package:hive_ce_flutter/hive_flutter.dart";
 import "package:intl/intl.dart";
 import "package:uuid/uuid.dart";
 
-import "package:widget_training/models/task.dart";
+import "package:flutter_notes/models/task.dart";
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({super.key});
@@ -15,6 +15,7 @@ class TasksScreen extends StatefulWidget {
 class TasksScreenState extends State<TasksScreen> {
   TaskFilter _selectedFilter = TaskFilter.today;
   final _box = Hive.box<Task>("tasks");
+  final _prefsBox = Hive.box("user_preferences");
   final _uuid = const Uuid();
 
   void _addTask(String text, DateTime? dueDate) async {
@@ -201,6 +202,16 @@ class TasksScreenState extends State<TasksScreen> {
         );
       },
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFilter =
+        TaskFilter.values[_prefsBox.get(
+          "default_task_filter",
+          defaultValue: 0,
+        )];
   }
 
   @override
@@ -413,9 +424,16 @@ class TasksScreenState extends State<TasksScreen> {
                             ),
                             confirmDismiss: (direction) async {
                               if (direction == DismissDirection.endToStart) {
-                                final bool? confirm =
-                                    await _showDeleteConfirmationDialog(task);
-                                return confirm ?? false;
+                                final bool confirmDeletions = _prefsBox.get(
+                                  "confirm_deletions",
+                                  defaultValue: true,
+                                );
+                                if (confirmDeletions) {
+                                  final bool? confirm =
+                                      await _showDeleteConfirmationDialog(task);
+                                  return confirm ?? false;
+                                }
+                                return true;
                               } else if (direction ==
                                   DismissDirection.startToEnd) {
                                 _toggleTaskComplete(task);

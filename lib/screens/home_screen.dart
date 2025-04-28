@@ -6,6 +6,36 @@ import "./notes_screen.dart";
 import "./gallery_screen.dart";
 import "./settings_screen.dart";
 
+class _MyFloatingActionButtonAnimator extends FloatingActionButtonAnimator {
+  const _MyFloatingActionButtonAnimator();
+
+  @override
+  Offset getOffset({
+    required Offset begin,
+    required Offset end,
+    required double progress,
+  }) {
+    if (progress < 0.5) {
+      return begin;
+    } else {
+      return end;
+    }
+  }
+
+  @override
+  Animation<double> getScaleAnimation({required Animation<double> parent}) {
+    return Tween<double>(
+      begin: 1.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: parent, curve: Curves.easeOut));
+  }
+
+  @override
+  Animation<double> getRotationAnimation({required Animation<double> parent}) {
+    return const AlwaysStoppedAnimation<double>(1.0);
+  }
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -31,8 +61,22 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _tabItems = [
       TasksScreen(key: _tasksScreenKey),
-      NotesScreen(key: _notesScreenKey),
-      GalleryScreen(key: _galleryScreenKey),
+      NotesScreen(
+        key: _notesScreenKey,
+        onSelectionModeChanged: (_) {
+          if (_selectedIndex == 1) {
+            setState(() {});
+          }
+        },
+      ),
+      GalleryScreen(
+        key: _galleryScreenKey,
+        onSelectionModeChanged: (_) {
+          if (_selectedIndex == 2) {
+            setState(() {});
+          }
+        },
+      ),
       const SettingsScreen(),
     ];
   }
@@ -55,11 +99,26 @@ class _HomeScreenState extends State<HomeScreen> {
           child: const Icon(Icons.add),
         );
       case 1:
+        final isNotesSelectionMode =
+            _notesScreenKey.currentState?.isSelectionMode ??
+            false; 
         return FloatingActionButton(
           key: const ValueKey("fab_notes"),
-          onPressed: () => _notesScreenKey.currentState?.addNote(),
-          tooltip: "Add Note",
-          child: const Icon(Icons.note_add_outlined),
+          onPressed:
+              isNotesSelectionMode
+                  ? () =>
+                      _notesScreenKey.currentState
+                          ?.deleteSelectedNotes() 
+                  : () => _notesScreenKey.currentState?.addNote(), 
+          tooltip: isNotesSelectionMode ? "Delete Selected" : "Add Note",
+          backgroundColor:
+              isNotesSelectionMode ? Colors.red : null, 
+          child: Icon(
+            isNotesSelectionMode
+                ? Icons
+                    .delete_outline 
+                : Icons.note_add_outlined, 
+          ),
         );
       case 2:
         final isGallerySelectionMode =
@@ -108,6 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+      floatingActionButtonAnimator: const _MyFloatingActionButtonAnimator(),
       floatingActionButton: _buildFab(),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: _onItemTapped,

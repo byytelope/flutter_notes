@@ -1,8 +1,8 @@
 import "package:hive_ce/hive.dart";
 
-import "package:widget_training/models/note.dart";
-import "package:widget_training/models/gallery_photo.dart";
-import "package:widget_training/models/task.dart";
+import "package:flutter_notes/models/note.dart";
+import "package:flutter_notes/models/gallery_photo.dart";
+import "package:flutter_notes/models/task.dart";
 
 part "hive_adapters.g.dart";
 

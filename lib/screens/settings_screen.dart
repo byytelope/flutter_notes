@@ -2,11 +2,11 @@ import "package:flutter/material.dart";
 import "package:hive_ce_flutter/hive_flutter.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
-import "package:widget_training/main.dart";
-import "package:widget_training/models/gallery_photo.dart";
-import "package:widget_training/models/note.dart";
-import "package:widget_training/models/task.dart";
-import "package:widget_training/screens/signin_screen.dart";
+import "package:flutter_notes/main.dart";
+import "package:flutter_notes/models/gallery_photo.dart";
+import "package:flutter_notes/models/note.dart";
+import "package:flutter_notes/models/task.dart";
+import "package:flutter_notes/screens/signin_screen.dart";
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -37,13 +37,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sign Out Failed: ${e.message}")),
+          SnackBar(
+            content: Text("Sign Out Failed: ${e.message}"),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("An unexpected error occurred: $e")),
+          SnackBar(
+            content: Text("An unexpected error occurred: $e"),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -187,9 +193,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () {
                 onConfirm();
                 Navigator.of(context).pop();
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text("$title successful")));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("$title successful"),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               },
             ),
           ],

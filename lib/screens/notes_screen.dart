@@ -3,10 +3,12 @@ import "package:uuid/uuid.dart";
 import "package:hive_ce_flutter/hive_flutter.dart";
 import "package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart";
 
-import "package:widget_training/models/note.dart";
+import "package:flutter_notes/models/note.dart";
 
 class NotesScreen extends StatefulWidget {
-  const NotesScreen({super.key});
+  final ValueChanged<bool>? onSelectionModeChanged;
+
+  const NotesScreen({super.key, this.onSelectionModeChanged});
 
   @override
   State<NotesScreen> createState() => NotesScreenState();
@@ -16,6 +18,8 @@ class NotesScreenState extends State<NotesScreen> {
   final TextEditingController _textController = TextEditingController();
   final _box = Hive.box<Note>("notes");
   final _uuid = const Uuid();
+  final Set<String> _selectedIds = {};
+  bool isSelectionMode = false;
 
   Future<String?> _showNoteDialog({String? initialText}) async {
     _textController.text = initialText ?? "";
@@ -93,8 +97,52 @@ class NotesScreenState extends State<NotesScreen> {
     }
   }
 
-  void _deleteNote(Note note) async {
-    await note.delete();
+  Future<void> _deleteNotes() async {
+    if (_selectedIds.isEmpty) return;
+
+    await _box.deleteAll(_selectedIds);
+
+    setState(() {
+      _disableSelectionMode();
+    });
+  }
+
+  void _toggleSelection(Note note) {
+    setState(() {
+      if (_selectedIds.contains(note.id)) {
+        _selectedIds.remove(note.id);
+        if (_selectedIds.isEmpty) {
+          isSelectionMode = false;
+        }
+      } else {
+        _selectedIds.add(note.id);
+        isSelectionMode = true;
+      }
+      widget.onSelectionModeChanged?.call(isSelectionMode);
+    });
+  }
+
+  void _enableSelectionMode(String id) {
+    if (!isSelectionMode) {
+      setState(() {
+        isSelectionMode = true;
+        _selectedIds.clear();
+        _selectedIds.add(id);
+        widget.onSelectionModeChanged?.call(isSelectionMode);
+      });
+    }
+  }
+
+  void _disableSelectionMode() {
+    setState(() {
+      isSelectionMode = false;
+      _selectedIds.clear();
+      widget.onSelectionModeChanged?.call(isSelectionMode);
+    });
+  }
+
+  void deleteSelectedNotes() {
+    _deleteNotes();
   }
 
   @override
@@ -108,15 +156,25 @@ class NotesScreenState extends State<NotesScreen> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          const SliverAppBar(
+          SliverAppBar(
             pinned: true,
             expandedHeight: 150.0,
             flexibleSpace: FlexibleSpaceBar(
-              title: Text("Notes"),
+              title: Text(
+                isSelectionMode ? "${_selectedIds.length} selected" : "Notes",
+              ),
               centerTitle: true,
             ),
+            leading:
+                isSelectionMode
+                    ? IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: _disableSelectionMode,
+                      tooltip: "Cancel Selection",
+                    )
+                    : null,
+            actions: isSelectionMode ? [] : null,
           ),
-
           ValueListenableBuilder(
             valueListenable: _box.listenable(),
             builder: (context, box, _) {
@@ -150,23 +208,57 @@ class NotesScreenState extends State<NotesScreen> {
                   childCount: notes.length,
                   itemBuilder: (context, index) {
                     final note = notes[index];
+                    final isSelected = _selectedIds.contains(note.id);
+
                     return Card.filled(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      color:
+                          isSelected
+                              ? Theme.of(context).colorScheme.tertiaryContainer
+                              : Theme.of(
+                                context,
+                              ).colorScheme.secondaryContainer,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8.0),
-                        onTap: () => _editNote(note),
+
+                        onTap: () {
+                          if (isSelectionMode) {
+                            _toggleSelection(note);
+                          } else {
+                            _editNote(note);
+                          }
+                        },
+                        onLongPress: () => _enableSelectionMode(note.id),
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                            note.text,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodyLarge?.copyWith(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSecondaryContainer,
-                            ),
+                          child: Column(
+                            spacing: 8.0,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (isSelected)
+                                Icon(
+                                  Icons.check_circle_outline,
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onTertiaryContainer,
+                                  size: 20,
+                                ),
+                              Text(
+                                note.text,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodyLarge?.copyWith(
+                                  color:
+                                      isSelected
+                                          ? Theme.of(
+                                            context,
+                                          ).colorScheme.onTertiaryContainer
+                                          : Theme.of(
+                                            context,
+                                          ).colorScheme.onSecondaryContainer,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

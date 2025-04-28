@@ -1,8 +1,8 @@
 import "package:flutter/material.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
-import "package:widget_training/screens/home_screen.dart";
-import "package:widget_training/screens/signin_screen.dart";
+import "package:flutter_notes/screens/home_screen.dart";
+import "package:flutter_notes/screens/signin_screen.dart";
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
